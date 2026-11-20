@@ -147,6 +147,7 @@
   <div class="buttons">
     <button id="phoneBtn">📱 Telefona Bağla</button>
     <button id="resetBtn" class="secondary">Sıfırla</button>
+    <button id="soloBtn" class="secondary">📲 Sadece Telefon</button>
   </div>
   <div class="buttons">
     <button id="soundBtn" class="secondary">🔇 Ses Kapalı</button>
@@ -460,6 +461,10 @@
     else if (phoneSeen()) setWait('✓ Telefon bağlı', true);
     el('overlay').classList.add('open');
     keepAwake();
+  });
+  // Tesla olmadan: ölçümü ve ekranı tamamen telefonda kullan
+  el('soloBtn').addEventListener('click', () => {
+    location.href = new URL('telefon.html', location.href).toString();
   });
   el('closeOverlay').addEventListener('click', () => {
     clearTimeout(closeTimer);
