@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0-100 Ölçer</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #15191f;
+    --text: #f2f4f7;
+    --muted: #8a93a0;
+    --accent: #e82127;
+    --ok: #2ecc71;
+    --warn: #f1c40f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+    user-select: none;
+  }
+  .topbar {
+    width: 100%;
+    max-width: 1100px;
+    display: flex;
+    align-items: center;
+    position: relative;
+    min-height: 56px;
+  }
+  .logo { height: 48px; width: auto; display: block; }
+  h1 {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 22px; font-weight: 600; color: var(--muted); letter-spacing: 1px;
+    white-space: nowrap;
+  }
+  @media (max-width: 520px) {
+    .logo { height: 36px; }
+    h1 { font-size: 16px; }
+  }
+  .status {
+    margin-top: 18px;
+    font-size: 28px;
+    font-weight: 700;
+    padding: 10px 28px;
+    border-radius: 40px;
+    background: var(--panel);
+  }
+  .status.ready { color: var(--ok); }
+  .status.running { color: var(--warn); }
+  .status.done { color: var(--accent); }
+  .speed {
+    font-size: clamp(90px, 22vw, 200px);
+    font-weight: 800;
+    line-height: 1;
+    margin-top: 24px;
+    font-variant-numeric: tabular-nums;
+  }
+  .unit { font-size: 26px; color: var(--muted); }
+  .timer {
+    font-size: clamp(56px, 12vw, 110px);
+    font-weight: 700;
+    margin-top: 24px;
+    font-variant-numeric: tabular-nums;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    width: 100%;
+    max-width: 720px;
+    margin-top: 28px;
+  }
+  .card {
+    background: var(--panel);
+    border-radius: 14px;
+    padding: 14px;
+    text-align: center;
+  }
+  .card .label { font-size: 14px; color: var(--muted); }
+  .card .value { font-size: 28px; font-weight: 700; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .buttons { display: flex; gap: 14px; margin-top: 28px; flex-wrap: wrap; justify-content: center; }
+  button {
+    font-size: 24px;
+    font-weight: 700;
+    padding: 18px 44px;
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+    color: #fff;
+    background: var(--accent);
+  }
+  button.secondary { background: #2b313a; }
+  .note { margin-top: 22px; font-size: 14px; color: var(--muted); text-align: center; max-width: 600px; }
+  .error { color: var(--accent); }
+  .source {
+    margin-top: 12px; font-size: 15px; color: var(--muted);
+    padding: 6px 16px; border-radius: 20px; background: var(--panel);
+  }
+  .source.phone { color: var(--ok); }
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.82);
+    display: none; align-items: center; justify-content: center; padding: 16px; z-index: 10;
+  }
+  .overlay.open { display: flex; }
+  .sheet {
+    background: var(--panel); border-radius: 20px; padding: 28px; max-width: 760px; width: 100%;
+    display: flex; gap: 28px; align-items: center; flex-wrap: wrap; justify-content: center;
+  }
+  .qr { background: #fff; border-radius: 14px; padding: 12px; width: 300px; height: 300px; flex: none; }
+  .qr svg, .qr img { width: 100%; height: 100%; display: block; }
+  .sheet .info { flex: 1; min-width: 240px; text-align: left; }
+  .sheet h2 { font-size: 26px; margin-bottom: 12px; }
+  .sheet ol { padding-left: 20px; color: var(--muted); font-size: 17px; line-height: 1.6; }
+  .sheet .code { margin-top: 14px; font-size: 15px; color: var(--muted); }
+  .sheet .code b { color: var(--text); letter-spacing: 2px; }
+  .sheet .wait { margin-top: 14px; font-size: 18px; font-weight: 700; color: var(--warn); }
+  .sheet .wait.on { color: var(--ok); }
+  .sheet button { margin-top: 18px; font-size: 18px; padding: 12px 28px; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <img src="teslalogo.png" alt="Tesla" class="logo" onerror="this.style.display='none'">
+    <h1>0 – 100 KM/S ÖLÇER</h1>
+  </div>
+  <div id="status" class="status">Başlamak için butona bas</div>
+  <div id="source" class="source">Kaynak: Tesla GPS</div>
+
+  <div class="speed"><span id="speed">0</span> <span class="unit">km/s</span></div>
+  <div class="timer" id="timer">0.00 sn</div>
+
+  <div class="grid">
+    <div class="card"><div class="label">Son Süre</div><div class="value" id="last">–</div></div>
+    <div class="card"><div class="label">En İyi Süre</div><div class="value" id="best">–</div></div>
+    <div class="card"><div class="label" id="accLabel">GPS Doğruluk</div><div class="value" id="acc">–</div></div>
+  </div>
+
+  <div class="buttons">
+    <button id="startBtn">Başlat</button>
+    <button id="resetBtn" class="secondary">Sıfırla</button>
+  </div>
+  <div class="buttons">
+    <button id="soundBtn" class="secondary">🔇 Ses Kapalı</button>
+    <button id="modeBtn" class="secondary">Ses Tipi: V8</button>
+    <button id="phoneBtn" class="secondary">📱 Telefon Bağla</button>
+  </div>
+
+  <p class="note" id="note">Tesla GPS'i saniyede yaklaşık 1 kez güncellenir, sonuç yaklaşık bir değerdir. Daha hassas ölçüm için telefonunu bağla. Sadece güvenli ve kapalı bir alanda dene.</p>
+
+  <div class="overlay" id="overlay">
+    <div class="sheet">
+      <div class="qr" id="qr"></div>
+      <div class="info">
+        <h2>Telefonunu bağla</h2>
+        <ol>
+          <li>Telefonunun kamerasıyla QR kodu okut.</li>
+          <li>Açılan sayfada "Sensörleri Başlat"a bas, izinleri ver.</li>
+          <li>Telefonu tutucuya ya da bardaklığa sabitle.</li>
+        </ol>
+        <div class="code">Oturum kodu: <b id="sessCode">–</b></div>
+        <div class="wait" id="waitText">Bağlantı kuruluyor...</div>
+        <button id="closeOverlay" class="secondary">Kapat</button>
+        <button id="newCode" class="secondary">Yeni Kod</button>
+      </div>
+    </div>
+  </div>
+
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="https://unpkg.com/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+  const TARGET = 100;     // hedef hız (km/s)
+  const STOP_LIMIT = 1;   // bu hızın altı "durdu" sayılır
+  const START_LIMIT = 2;  // bu hızın üstü "kalkış" sayılır
+
+  const el = id => document.getElementById(id);
+  let watchId = null;
+  let state = 'idle';     // idle | waiting | ready | running | done
+  let startTime = null;
+  let lastSample = null;  // {t, v}
+  let prevPos = null;
+  let timerLoop = null;
+  let wakeLock = null;
+
+  // ---------- MOTOR SESİ ----------
+  let actx = null, eng = null, soundOn = false, mode = 'v8', engineLoop = null;
+  let motion = { v: 0, a: 0, t: 0 }; // son hız, ivme ve zaman (tahmin için)
+
+  function initAudio() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return false;
+    actx = new AC();
+    const master = actx.createGain(); master.gain.value = 0;
+    master.connect(actx.destination);
+    const filter = actx.createBiquadFilter();
+    filter.type = 'lowpass'; filter.Q.value = 4;
+    filter.connect(master);
+
+    const body = actx.createGain(); body.gain.value = 0.7;
+    body.connect(filter);
+    const o1 = actx.createOscillator();
+    const o2 = actx.createOscillator(); o2.detune.value = 12;
+    const o3 = actx.createOscillator();
+    [o1, o2, o3].forEach(o => o.connect(body));
+
+    // V8'in "gurultusu" için sesi titreştiren düşük frekanslı dalga
+    const lfo = actx.createOscillator(); lfo.type = 'square';
+    const lfoGain = actx.createGain(); lfoGain.gain.value = 0.3;
+    lfo.connect(lfoGain); lfoGain.connect(body.gain);
+
+    [o1, o2, o3, lfo].forEach(o => o.start());
+    eng = { master, filter, o1, o2, o3, lfo, lfoGain };
+    return true;
+  }
+
+  function engineParams(v) {
+    if (mode === 'v8') {
+      // Hayali vites aralıkları (km/s): her viteste devir yükselip düşüyor
+      const gears = [0, 45, 75, 110, 150, 200, 999];
+      let rpm;
+      if (v < 1) {
+        rpm = 850; // rölanti
+      } else {
+        let i = 0;
+        while (v >= gears[i + 1]) i++;
+        const frac = (v - gears[i]) / (gears[i + 1] - gears[i]);
+        const low = i === 0 ? 1000 : 3200;
+        rpm = low + frac * (6500 - low);
+      }
+      const f = rpm / 60 * 4; // V8 ateşleme frekansı
+      return { f, f3: f / 2, cut: 300 + rpm * 0.6, vol: 0.12 + (rpm / 6500) * 0.18,
+               lfo: f / 8, lfoDepth: 0.3, waves: ['sawtooth', 'sawtooth', 'sine'] };
+    }
+    // Elektrik: hızla birlikte yükselen uğultu
+    const f = 60 + v * 9;
+    return { f, f3: f * 2, cut: 600 + v * 30,
+             vol: v < 1 ? 0.02 : 0.05 + Math.min(v, 150) / 150 * 0.12,
+             lfo: 0.1, lfoDepth: 0, waves: ['sine', 'triangle', 'sine'] };
+  }
+
+  function updateEngine(v) {
+    if (!eng) return;
+    const p = engineParams(v);
+    const now = actx.currentTime, tc = 0.12;
+    eng.o1.type = p.waves[0]; eng.o2.type = p.waves[1]; eng.o3.type = p.waves[2];
+    eng.o1.frequency.setTargetAtTime(p.f, now, tc);
+    eng.o2.frequency.setTargetAtTime(p.f, now, tc);
+    eng.o3.frequency.setTargetAtTime(p.f3, now, tc);
+    eng.filter.frequency.setTargetAtTime(p.cut, now, tc);
+    eng.lfo.frequency.setTargetAtTime(p.lfo, now, tc);
+    eng.lfoGain.gain.setTargetAtTime(p.lfoDepth, now, tc);
+    eng.master.gain.setTargetAtTime(soundOn ? p.vol : 0, now, 0.15);
+  }
+
+  // GPS saniyede bir geldiği için arada hızı ivmeye göre tahmin et
+  function startEngineLoop() {
+    if (engineLoop) return;
+    engineLoop = setInterval(() => {
+      const el = Math.min((Date.now() - motion.t) / 1000, 1.5);
+      const est = Math.max(0, motion.v + motion.a * el);
+      updateEngine(est);
+    }, 100);
+  }
+
+  function setStatus(text, cls) {
+    const s = el('status');
+    s.textContent = text;
+    s.className = 'status' + (cls ? ' ' + cls : '');
+  }
+
+  function fmt(sec) { return sec.toFixed(2) + ' sn'; }
+
+  function loadBest() {
+    try {
+      const b = localStorage.getItem('best0100');
+      if (b) el('best').textContent = fmt(parseFloat(b));
+    } catch (e) {}
+  }
+
+  function saveBest(sec) {
+    try {
+      const b = parseFloat(localStorage.getItem('best0100'));
+      if (isNaN(b) || sec < b) {
+        localStorage.setItem('best0100', sec);
+        el('best').textContent = fmt(sec);
+      }
+    } catch (e) {}
+  }
+
+  // İki nokta arası mesafe (metre)
+  function distance(a, b) {
+    const R = 6371000, rad = Math.PI / 180;
+    const dLat = (b.latitude - a.latitude) * rad;
+    const dLon = (b.longitude - a.longitude) * rad;
+    const x = Math.sin(dLat / 2) ** 2 +
+      Math.cos(a.latitude * rad) * Math.cos(b.latitude * rad) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(x));
+  }
+
+  function getSpeedKmh(pos) {
+    // Önce cihazın verdiği hızı kullan, yoksa konum farkından hesapla
+    if (pos.coords.speed !== null && !isNaN(pos.coords.speed)) {
+      return Math.max(0, pos.coords.speed * 3.6);
+    }
+    if (prevPos) {
+      const dt = (pos.timestamp - prevPos.timestamp) / 1000;
+      if (dt > 0) return (distance(prevPos.coords, pos.coords) / dt) * 3.6;
+    }
+    return 0;
+  }
+
+  function onPosition(pos) {
+    // Telefon bağlıyken ölçümü telefon yapar, Tesla GPS'i sadece yedekte bekler
+    if (phoneLive()) { prevPos = pos; lastSample = null; return; }
+    const v = getSpeedKmh(pos);
+    const t = pos.timestamp;
+    prevPos = pos;
+
+    el('speed').textContent = Math.round(v);
+    el('acc').textContent = Math.round(pos.coords.accuracy) + ' m';
+
+    if (state === 'waiting' && v < STOP_LIMIT) {
+      state = 'ready';
+      setStatus('Hazır! Gaza bas', 'ready');
+    } else if (state === 'ready') {
+      if (v >= START_LIMIT) {
+        // Kalkış anını son "durgun" örnekle bu örnek arasında tahmin et
+        if (lastSample && lastSample.v < START_LIMIT) {
+          const ratio = (START_LIMIT - lastSample.v) / (v - lastSample.v);
+          startTime = lastSample.t + ratio * (t - lastSample.t);
+        } else {
+          startTime = t;
+        }
+        state = 'running';
+        setStatus('Ölçülüyor...', 'running');
+        startTimer();
+      }
+    } else if (state === 'running') {
+      if (v >= TARGET) {
+        // 100'e tam ulaşma anını iki örnek arasında doğrusal olarak tahmin et
+        let endTime = t;
+        if (lastSample && lastSample.v < TARGET && v > lastSample.v) {
+          const ratio = (TARGET - lastSample.v) / (v - lastSample.v);
+          endTime = lastSample.t + ratio * (t - lastSample.t);
+        }
+        finish((endTime - startTime) / 1000);
+      } else if (v < STOP_LIMIT) {
+        // Araç tekrar durduysa ölçümü iptal et
+        stopTimer();
+        el('timer').textContent = fmt(0);
+        state = 'ready';
+        setStatus('Durdun. Tekrar hazır', 'ready');
+      }
+    }
+    // Motor sesi için hız ve ivmeyi kaydet
+    let a = 0;
+    if (lastSample) {
+      const dt = (t - lastSample.t) / 1000;
+      if (dt > 0 && dt < 3) a = (v - lastSample.v) / dt;
+    }
+    motion = { v, a, t: Date.now() };
+
+    lastSample = { t, v };
+  }
+
+  function startTimer() {
+    stopTimer();
+    timerLoop = setInterval(() => {
+      if (startTime) el('timer').textContent = fmt((Date.now() - startTime) / 1000);
+    }, 50);
+  }
+
+  function stopTimer() {
+    if (timerLoop) clearInterval(timerLoop);
+    timerLoop = null;
+  }
+
+  function finish(sec) {
+    stopTimer();
+    state = 'done';
+    el('timer').textContent = fmt(sec);
+    el('last').textContent = fmt(sec);
+    saveBest(sec);
+    setStatus('Bitti! Yeni deneme için dur', 'done');
+    // Araç durunca otomatik yeniden hazır ol
+    setTimeout(() => { if (state === 'done') state = 'waiting'; }, 1500);
+  }
+
+  function onError(err) {
+    const msgs = {
+      1: 'Konum izni verilmedi. Tarayıcı ayarlarından izin ver.',
+      2: 'Konum alınamıyor. GPS sinyalini kontrol et.',
+      3: 'Konum isteği zaman aşımına uğradı.'
+    };
+    setStatus('Hata', 'done');
+    el('note').innerHTML = '<span class="error">' + (msgs[err.code] || err.message) + '</span>';
+  }
+
+  async function keepAwake() {
+    try {
+      if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+    } catch (e) {}
+  }
+
+  el('startBtn').addEventListener('click', () => {
+    if (!('geolocation' in navigator)) {
+      setStatus('Bu tarayıcı GPS desteklemiyor', 'done');
+      return;
+    }
+    if (watchId === null) {
+      watchId = navigator.geolocation.watchPosition(onPosition, onError, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 15000
+      });
+      keepAwake();
+    }
+    state = 'waiting';
+    setStatus('Aracı durdur...', '');
+    el('startBtn').textContent = 'Yeniden Başlat';
+  });
+
+  el('resetBtn').addEventListener('click', () => {
+    stopTimer();
+    startTime = null;
+    lastSample = null;
+    el('timer').textContent = fmt(0);
+    el('last').textContent = '–';
+    el('best').textContent = '–';
+    try { localStorage.removeItem('best0100'); } catch (e) {}
+    if (watchId !== null) {
+      state = 'waiting';
+      setStatus('Aracı durdur...', '');
+    } else {
+      state = 'idle';
+      setStatus('Başlamak için butona bas', '');
+    }
+  });
+
+  el('soundBtn').addEventListener('click', () => {
+    if (!actx && !initAudio()) {
+      el('note').innerHTML = '<span class="error">Bu tarayıcı ses üretmeyi desteklemiyor.</span>';
+      return;
+    }
+    actx.resume();
+    soundOn = !soundOn;
+    el('soundBtn').textContent = soundOn ? '🔊 Ses Açık' : '🔇 Ses Kapalı';
+    startEngineLoop();
+  });
+
+  el('modeBtn').addEventListener('click', () => {
+    mode = mode === 'v8' ? 'elektrik' : 'v8';
+    el('modeBtn').textContent = 'Ses Tipi: ' + (mode === 'v8' ? 'V8' : 'Elektrik');
+  });
+
+  // ---------- TELEFON BAĞLANTISI ----------
+  // Tesla ekranı ve telefon, oturuma özel bir kanal üzerinden haberleşir.
+  // Süreyi telefon kendi saatiyle ölçtüğü için internet gecikmesi sonucu etkilemez.
+  const BROKERS = [
+    'wss://broker.emqx.io:8084/mqtt',
+    'wss://broker.hivemq.com:8884/mqtt',
+    'wss://test.mosquitto.org:8081'
+  ];
+  let mq = null, mqOk = false, brokerIdx = 0, sid = null, tryTimer = null;
+  let phone = { last: 0, st: null, el: 0, elAt: 0, v: 0, hz: 0, gps: null, on: false };
+  let phoneResult = null, lastResultId = null, wasPhone = false, closeTimer = null;
+
+  function phoneLive() { return phone.on && Date.now() - phone.last < 3000; }
+  function phoneSeen() { return Date.now() - phone.last < 3000; }
+
+  function newSessionId() {
+    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+    const r = new Uint8Array(10);
+    (window.crypto || window.msCrypto).getRandomValues(r);
+    return Array.from(r, x => chars[x % chars.length]).join('');
+  }
+
+  function phoneUrl() {
+    const u = new URL('telefon.html', location.href);
+    u.search = '?s=' + sid + '&b=' + brokerIdx;
+    u.hash = '';
+    return u.toString();
+  }
+
+  function renderQR() {
+    el('sessCode').textContent = sid.slice(0, 4).toUpperCase();
+    if (typeof qrcode === 'undefined') {
+      el('qr').innerHTML = '<div style="color:#000;padding:20px;font-size:14px;word-break:break-all">QR yüklenemedi. Telefonda şu adresi aç:<br><br>' + phoneUrl() + '</div>';
+      return;
+    }
+    const qr = qrcode(0, 'M');
+    qr.addData(phoneUrl());
+    qr.make();
+    el('qr').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+  }
+
+  function setWait(text, on) {
+    el('waitText').textContent = text;
+    el('waitText').className = 'wait' + (on ? ' on' : '');
+  }
+
+  function startSession() {
+    if (mq) { try { mq.end(true); } catch (e) {} mq = null; }
+    mqOk = false;
+    sid = newSessionId();
+    brokerIdx = 0;
+    phone = { last: 0, st: null, el: 0, elAt: 0, v: 0, hz: 0, gps: null, on: false };
+    renderQR();
+    connectBroker();
+  }
+
+  function connectBroker() {
+    if (typeof mqtt === 'undefined') {
+      setWait('Bağlantı kütüphanesi yüklenemedi. İnterneti kontrol et.', false);
+      return;
+    }
+    clearTimeout(tryTimer);
+    setWait('Bağlantı kuruluyor...', false);
+    const c = mqtt.connect(BROKERS[brokerIdx], {
+      clientId: 'c_' + sid + '_' + Math.random().toString(36).slice(2, 8),
+      keepalive: 20, reconnectPeriod: 3000, connectTimeout: 7000, clean: true
+    });
+    mq = c;
+    // Bu sunucuya bağlanamazsak sıradakini dene (QR da ona göre yenilenir)
+    tryTimer = setTimeout(() => {
+      if (!mqOk && mq === c && brokerIdx < BROKERS.length - 1) {
+        try { c.end(true); } catch (e) {}
+        brokerIdx++;
+        renderQR();
+        connectBroker();
+      }
+    }, 8000);
+    c.on('connect', () => {
+      if (mq !== c) return;
+      mqOk = true;
+      c.subscribe('t0100/' + sid + '/p');
+      c.publish('t0100/' + sid + '/c', JSON.stringify({ k: 'hi' }));
+      if (!phoneSeen()) setWait('Telefon bekleniyor...', false);
+    });
+    c.on('message', (topic, payload) => {
+      if (mq !== c) return;
+      let m; try { m = JSON.parse(payload.toString()); } catch (e) { return; }
+      onPhoneMessage(m);
+    });
+  }
+
+  function sendToPhone(obj) {
+    if (mq && mqOk) mq.publish('t0100/' + sid + '/c', JSON.stringify(obj));
+  }
+
+  function onPhoneMessage(m) {
+    const first = !phoneSeen();
+    phone.last = Date.now();
+    if (first && el('overlay').classList.contains('open')) {
+      setWait('✓ Telefon bağlandı', true);
+      clearTimeout(closeTimer);
+      closeTimer = setTimeout(() => el('overlay').classList.remove('open'), 1500);
+    }
+    if (m.k === 's') {
+      phone.on = !!m.on;
+      if (m.st === 'running' && phone.st !== 'running') stopTimer();
+      phone.st = m.st; phone.v = m.v; phone.hz = m.hz; phone.gps = m.gps;
+      phone.el = m.el; phone.elAt = Date.now();
+      // Motor sesi telefonun daha sık gelen verisini kullansın
+      if (phone.on) motion = { v: m.v, a: (m.a || 0) * 3.6, t: Date.now() };
+    } else if (m.k === 'r') {
+      if (m.provisional) {
+        phoneResult = { time: m.time, provisional: true };
+      } else if (m.id !== lastResultId) {
+        lastResultId = m.id;
+        phoneResult = { time: m.time, provisional: false, moved: m.moved, peakG: m.peakG };
+        el('last').textContent = fmt(m.time);
+        saveBest(m.time);
+      }
+    }
+  }
+
+  // Telefon modunda ekranı güncelle
+  setInterval(() => {
+    const live = phoneLive();
+    if (live) {
+      if (!wasPhone) { stopTimer(); state = 'idle'; }
+      wasPhone = true;
+      el('source').textContent = '📱 Kaynak: Telefon sensörleri';
+      el('source').className = 'source phone';
+      el('accLabel').textContent = 'Sensör';
+      el('acc').textContent = (phone.hz || '–') + ' Hz';
+      el('speed').textContent = Math.round(phone.v);
+      const st = phone.st;
+      if (st === 'calib') {
+        setStatus('Telefon ayarlanıyor, araç dursun...', '');
+        el('timer').textContent = fmt(0);
+      } else if (st === 'ready') {
+        setStatus('Hazır! Gaza bas', 'ready');
+        el('timer').textContent = fmt(0);
+      } else if (st === 'running') {
+        setStatus('Ölçülüyor...', 'running');
+        const extra = Math.min((Date.now() - phone.elAt) / 1000, 0.3);
+        el('timer').textContent = fmt(phone.el + extra);
+      } else if (st === 'finishing') {
+        setStatus('Sonuç düzeltiliyor...', 'running');
+        if (phoneResult) el('timer').textContent = fmt(phoneResult.time);
+      } else if (st === 'done') {
+        const moved = phoneResult && phoneResult.moved;
+        setStatus(moved ? 'Bitti (telefon kıpırdadı, sonuç şüpheli)' : 'Bitti! Yeni deneme için dur', 'done');
+        if (phoneResult) el('timer').textContent = fmt(phoneResult.time);
+      }
+    } else if (phoneSeen()) {
+      el('source').textContent = '📱 Telefon bağlı, telefonda "Sensörleri Başlat"a bas';
+      el('source').className = 'source';
+    } else if (wasPhone) {
+      wasPhone = false;
+      el('source').textContent = 'Telefon bağlantısı koptu. Kaynak: Tesla GPS';
+      el('source').className = 'source';
+      el('accLabel').textContent = 'GPS Doğruluk';
+      el('acc').textContent = '–';
+      state = watchId !== null ? 'waiting' : 'idle';
+      setStatus(watchId !== null ? 'Aracı durdur...' : 'Başlamak için butona bas', '');
+    }
+  }, 50);
+
+  el('phoneBtn').addEventListener('click', () => {
+    if (!sid) startSession();
+    else if (phoneSeen()) setWait('✓ Telefon bağlı', true);
+    el('overlay').classList.add('open');
+  });
+  el('closeOverlay').addEventListener('click', () => {
+    clearTimeout(closeTimer);
+    el('overlay').classList.remove('open');
+  });
+  el('newCode').addEventListener('click', startSession);
+  // Telefon bağlıyken "Başlat", telefonu yeni denemeye hazırlar
+  el('startBtn').addEventListener('click', () => { if (phoneSeen()) sendToPhone({ k: 'arm' }); });
+
+  loadBest();
+</script>
+</body>
+</html>
